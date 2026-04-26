@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Case Hub — Instructor Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --primary: #1A3D52;
+    --primary-mid: #1D6E8C;
+    --primary-light: #E6F4F8;
+    --accent: #2E8B6A;
+    --accent-light: #E3F4EE;
+    --warn: #B87316;
+    --warn-light: #FDF3E3;
+    --danger: #A32D2D;
+    --danger-light: #FCEBEB;
+    --gray-100: #F5F5F3;
+    --gray-200: #E8E7E3;
+    --gray-400: #9A9890;
+    --gray-600: #5F5E5A;
+    --text: #1A1A18;
+    --text-muted: #5F5E5A;
+    --bg: #FFFFFF;
+    --bg-secondary: #F0F4F6;
+    --border: rgba(0,0,0,0.1);
+    --radius: 10px;
+    --font-sans: 'Helvetica Neue', Arial, sans-serif;
+    --font: 'Georgia', serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); background: var(--bg-secondary); color: var(--text); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+  /* LOGIN */
+  .login-screen { position: fixed; inset: 0; background: var(--primary); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+  .login-screen.hidden { display: none; }
+  .login-box { background: white; border-radius: 14px; padding: 36px 40px; width: 100%; max-width: 400px; text-align: center; }
+  .login-title { font-family: var(--font); font-size: 20px; color: var(--primary); margin-bottom: 4px; }
+  .login-sub { font-size: 12px; color: var(--gray-600); margin-bottom: 24px; }
+  .login-box input { width: 100%; border: 1px solid var(--gray-200); border-radius: 8px; padding: 10px 14px; font-size: 14px; text-align: center; margin-bottom: 12px; }
+  .login-box input:focus { outline: none; border-color: var(--primary-mid); }
+  .login-box button { width: 100%; background: var(--primary); color: white; border: none; border-radius: 8px; padding: 11px; font-size: 14px; font-family: var(--font-sans); cursor: pointer; }
+  .login-box button:hover { background: #0e2a38; }
+  .login-error { font-size: 12px; color: var(--danger); margin-top: 8px; display: none; }
+
+  /* HEADER */
+  .inst-header { background: var(--primary); color: white; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .inst-header h1 { font-size: 16px; font-weight: 500; font-family: var(--font); }
+  .inst-header .badge { font-size: 11px; background: rgba(255,200,0,0.25); border: 1px solid rgba(255,200,0,0.4); padding: 2px 10px; border-radius: 20px; margin-left: 10px; }
+  .header-actions { display: flex; gap: 8px; }
+  .hbtn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: white; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-family: var(--font-sans); cursor: pointer; transition: background 0.12s; }
+  .hbtn:hover { background: rgba(255,255,255,0.25); }
+  .hbtn.active { background: rgba(255,200,0,0.3); border-color: rgba(255,200,0,0.5); }
+
+  /* NAV TABS */
+  .dash-tabs { display: flex; background: white; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .dash-tab { padding: 12px 20px; font-size: 13px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.12s; }
+  .dash-tab:hover { color: var(--primary-mid); background: var(--primary-light); }
+  .dash-tab.active { color: var(--primary-mid); border-bottom-color: var(--primary-mid); font-weight: 500; }
+
+  /* CONTENT */
+  .dash-content { display: none; padding: 24px; max-width: 1100px; margin: 0 auto; }
+  .dash-content.active { display: block; }
+
+  /* CARDS */
+  .card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 12px; font-weight: 600; color: var(--primary-mid); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* STAT CARDS */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat-card { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+  .stat-value { font-size: 26px; font-weight: 500; color: var(--primary-mid); }
+
+  /* TABLE */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { background: var(--gray-100); padding: 8px 12px; text-align: left; font-weight: 500; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+  .data-table td { padding: 9px 12px; border-bottom: 1px solid var(--gray-100); vertical-align: top; }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--gray-100); }
+  .clickable { cursor: pointer; color: var(--primary-mid); text-decoration: underline; }
+
+  /* BADGES */
+  .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .pill-green { background: var(--accent-light); color: var(--accent); }
+  .pill-blue { background: var(--primary-light); color: var(--primary-mid); }
+  .pill-warn { background: var(--warn-light); color: var(--warn); }
+  .pill-gray { background: var(--gray-100); color: var(--gray-600); }
+  .pill-danger { background: var(--danger-light); color: var(--danger); }
+
+  /* ENGAGEMENT BAR */
+  .eng-bar { width: 60px; height: 6px; background: var(--gray-200); border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 4px; }
+  .eng-fill { height: 6px; border-radius: 3px; background: var(--accent); }
+
+  /* DETAIL MODAL */
+  .detail-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 500; display: none; align-items: flex-start; justify-content: center; padding: 20px; overflow-y: auto; }
+  .detail-modal.open { display: flex; }
+  .detail-box { background: white; border-radius: var(--radius); width: 100%; max-width: 780px; max-height: 90vh; overflow-y: auto; margin-top: 20px; }
+  .detail-header { background: var(--primary); color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; }
+  .detail-header h3 { font-size: 15px; font-weight: 500; }
+  .detail-close { background: rgba(255,255,255,0.15); border: none; color: white; border-radius: 6px; padding: 5px 14px; font-size: 13px; cursor: pointer; }
+  .detail-body { padding: 20px; }
+  .detail-section { margin-bottom: 20px; }
+  .detail-section h4 { font-size: 12px; font-weight: 600; color: var(--primary-mid); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .detail-field { margin-bottom: 12px; }
+  .detail-field label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 3px; }
+  .detail-field .val { font-size: 13px; background: var(--gray-100); border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; line-height: 1.6; }
+  .chat-log { background: var(--gray-100); border-radius: 8px; padding: 12px; max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .chat-log-msg { font-size: 12px; padding: 6px 10px; border-radius: 8px; max-width: 85%; }
+  .chat-log-msg.student { background: var(--primary-mid); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
+  .chat-log-msg.other { background: white; color: var(--text); align-self: flex-start; border-bottom-left-radius: 2px; border: 1px solid var(--border); }
+  .chat-log-msg .role { font-size: 10px; opacity: 0.7; margin-bottom: 2px; font-weight: 500; }
+
+  /* FORMS */
+  .field-group { margin-bottom: 14px; }
+  .field-group label { font-size: 12px; font-weight: 500; color: var(--text-muted); display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .field-group input, .field-group textarea, .field-group select { width: 100%; border: 1px solid var(--gray-200); border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: var(--font-sans); color: var(--text); background: white; resize: vertical; }
+  .field-group textarea { min-height: 80px; }
+  .field-group input:focus, .field-group textarea:focus, .field-group select:focus { outline: none; border-color: var(--primary-mid); }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+  /* BUTTONS */
+  .btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-family: var(--font-sans); cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text); transition: background 0.12s; }
+  .btn:hover { background: var(--gray-100); }
+  .btn-primary { background: var(--primary-mid); color: white; border-color: var(--primary-mid); }
+  .btn-primary:hover { background: #155f7a; }
+  .btn-accent { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-accent:hover { background: #237057; }
+  .btn-danger { background: none; border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger-light); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .success-msg { font-size: 12px; color: var(--accent); margin-top: 8px; display: none; }
+
+  /* RESOURCE CARD EDITOR */
+  .res-edit-card { background: var(--gray-100); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+  .ipp-edit-card { background: var(--gray-100); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 10px; }
+  .add-btn { background: var(--accent-light); border: 1px solid rgba(46,139,106,0.3); color: var(--accent); border-radius: 6px; padding: 7px 14px; font-size: 13px; font-family: var(--font-sans); cursor: pointer; }
+
+  /* CASE PILLS */
+  .case-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .case-pill { padding: 4px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: white; color: var(--text-muted); }
+  .case-pill.active { background: var(--primary-mid); color: white; border-color: var(--primary-mid); }
+
+  /* UPLOAD */
+  .upload-zone { border: 2px dashed var(--gray-200); border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.15s; }
+  .upload-zone:hover { border-color: var(--primary-mid); }
+  .upload-zone input { display: none; }
+  .upload-zone p { font-size: 13px; color: var(--text-muted); }
+  .upload-preview { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); margin: 10px auto; display: none; }
+
+  /* LOADING */
+  .loading { text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px; }
+
+  .section-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  @media (max-width: 600px) {
+    .dash-content { padding: 16px; }
+    .row-2, .row-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-title">Instructor Dashboard</div>
+    <div class="login-sub">Clinical Nutrition Case Study Hub &mdash; UGA</div>
+    <input type="password" id="pwInput" placeholder="Instructor password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button onclick="doLogin()">Sign In</button>
+    <div class="login-error" id="loginError">Incorrect password.</div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="detail-modal" id="detailModal">
+  <div class="detail-box">
+    <div class="detail-header">
+      <h3 id="detailTitle">Student Detail</h3>
+      <button class="detail-close" onclick="closeDetail()">✕ Close</button>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="inst-header">
+  <div style="display:flex;align-items:center;">
+    <h1>Instructor Dashboard</h1>
+    <span class="badge">⚙ Instructor</span>
+  </div>
+  <div class="header-actions">
+    <button class="hbtn" onclick="refreshAll()">↺ Refresh</button>
+    <button class="hbtn" id="addStudentBtn" onclick="showAddStudent()">+ Add Student</button>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="dash-tabs">
+  <div class="dash-tab active" onclick="switchDash('overview',this)">Overview</div>
+  <div class="dash-tab" onclick="switchDash('students',this)">Students</div>
+  <div class="dash-tab" onclick="switchDash('activity',this)">Activity</div>
+  <div class="dash-tab" onclick="switchDash('cases',this)">Case Editor</div>
+  <div class="dash-tab" onclick="switchDash('resources',this)">Resources</div>
+  <div class="dash-tab" onclick="switchDash('userguide',this)">User Guide</div>
+  <div class="dash-tab" onclick="switchDash('echo',this)">Echo Settings</div>
+</div>
+
+<!-- ===== OVERVIEW ===== -->
+<div class="dash-content active" id="dash-overview">
+  <div class="stat-grid" id="statGrid">
+    <div class="stat-card"><div class="stat-label">Total Students</div><div class="stat-value" id="stat-students">—</div></div>
+    <div class="stat-card"><div class="stat-label">Active Today</div><div class="stat-value" id="stat-today">—</div></div>
+    <div class="stat-card"><div class="stat-label">Cases Attempted</div><div class="stat-value" id="stat-cases">—</div></div>
+    <div class="stat-card"><div class="stat-label">ADIME Saves</div><div class="stat-value" id="stat-saves">—</div></div>
+    <div class="stat-card"><div class="stat-label">IPP Conversations</div><div class="stat-value" id="stat-ipp">—</div></div>
+    <div class="stat-card"><div class="stat-label">Echo Messages</div><div class="stat-value" id="stat-echo">—</div></div>
+    <div class="stat-card"><div class="stat-label">Feedback Submitted</div><div class="stat-value" id="stat-feedback">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Recent Activity</div>
+    <div id="recentActivity"><div class="loading">Loading...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">IPP Engagement by Case</div>
+    <div id="ippEngagementChart"><div class="loading">Loading...</div></div>
+  </div>
+</div>
+
+<!-- ===== STUDENTS ===== -->
+<div class="dash-content" id="dash-students">
+  <div class="card">
+    <div class="card-title">Student Roster</div>
+    <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">
+      <input type="text" id="studentSearch" placeholder="Search by name or code..." style="border:1px solid var(--gray-200);border-radius:6px;padding:7px 12px;font-size:13px;width:260px;" oninput="filterStudents()">
+      <select id="sectionFilter" style="border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:13px;" onchange="filterStudents()">
+        <option value="">All sections</option>
+      </select>
+    </div>
+    <div id="studentTable"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- ADD STUDENT FORM -->
+  <div class="card" id="addStudentForm" style="display:none;">
+    <div class="card-title">Add Student</div>
+    <div class="row-2">
+      <div class="field-group"><label>Full Name</label><input id="ns_name" placeholder="e.g. Lauren Mitchell"></div>
+      <div class="field-group"><label>Access Code</label><input id="ns_code" placeholder="e.g. NTR4500-F25-01"></div>
+    </div>
+    <div class="row-2">
+      <div class="field-group"><label>Email (optional)</label><input id="ns_email" placeholder="student@uga.edu"></div>
+      <div class="field-group"><label>Section (optional)</label><input id="ns_section" placeholder="Fall 2025"></div>
+    </div>
+    <div class="section-actions">
+      <button class="btn" onclick="document.getElementById('addStudentForm').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="addStudent()">Add Student</button>
+    </div>
+    <div class="success-msg" id="addStudentSuccess">Student added.</div>
+  </div>
+</div>
+
+<!-- ===== ACTIVITY ===== -->
+<div class="dash-content" id="dash-activity">
+  <div class="card">
+    <div class="card-title">Filter Activity</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <select id="actCaseFilter" style="border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:13px;" onchange="loadActivity()">
+        <option value="">All cases</option>
+        <option value="0">Case 01 — DM2 + CKD</option>
+        <option value="1">Case 02 — Oncology / EN</option>
+        <option value="2">Case 03 — Pediatric FTT</option>
+        <option value="3">Case 04 — ESRD / HD</option>
+        <option value="4">Case 05 — Cardiac ICU</option>
+        <option value="5">Case 06 — Anorexia Nervosa</option>
+        <option value="6">Case 07 — Bariatric Pre-Op</option>
+        <option value="7">Case 08 — Graves Disease</option>
+        <option value="8">Case 09 — TBI / PN</option>
+        <option value="9">Case 10 — Crohn's</option>
+        <option value="10">Case 11 — GDM</option>
+        <option value="11">Case 12 — Peds Obesity</option>
+      </select>
+      <select id="actTypeFilter" style="border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;font-size:13px;" onchange="loadActivity()">
+        <option value="adime">ADIME Notes</option>
+        <option value="ipp">IPP Conversations</option>
+        <option value="patient">Patient Interviews</option>
+        <option value="echo">Echo Conversations</option>
+        <option value="feedback">Feedback</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <div id="activityTable"><div class="loading">Loading...</div></div>
+  </div>
+</div>
+
+<!-- ===== CASE EDITOR ===== -->
+<div class="dash-content" id="dash-cases">
+  <div class="case-pills" id="casePills"></div>
+  <div id="caseEditorBody"><div class="loading">Loading...</div></div>
+</div>
+
+<!-- ===== RESOURCES ===== -->
+<div class="dash-content" id="dash-resources">
+  <div class="card">
+    <div class="card-title">Resource Library</div>
+    <div id="resourceEditorList"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="add-btn" onclick="addResource()">+ Add Resource</button>
+      <label class="add-btn" style="cursor:pointer;">
+        📄 Upload PDF
+        <input type="file" accept=".pdf" style="display:none;" onchange="uploadPdf(this)">
+      </label>
+    </div>
+    <div class="section-actions">
+      <button class="btn btn-accent" onclick="saveAllResources()">Save All Resources</button>
+    </div>
+    <div class="success-msg" id="resSuccess">Resources saved.</div>
+  </div>
+</div>
+
+<!-- ===== USER GUIDE ===== -->
+<div class="dash-content" id="dash-userguide">
+  <div class="card">
+    <div class="card-title">User Guide Content</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
+      This content appears in the User Guide tab that students see in the Artifact. Edit sections below, add new ones, or remove sections that don't apply. Changes are saved to Supabase and students see them immediately on next login.
+    </p>
+    <div id="userGuideEditorList"></div>
+    <button class="add-btn" onclick="addGuideSection()" style="margin-top:10px;">+ Add Section</button>
+    <div class="section-actions">
+      <button class="btn btn-accent" onclick="saveUserGuide()">Save User Guide</button>
+    </div>
+    <div class="success-msg" id="guideSuccess">User guide saved.</div>
+  </div>
+</div>
+
+<!-- ===== ECHO SETTINGS ===== -->
+<div class="dash-content" id="dash-echo">
+  <div class="card">
+    <div class="card-title">Echo Coaching Instructions</div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;line-height:1.6;">
+      These instructions are appended to Echo's system prompt on every student conversation. Use this to add grading rubric notes, semester-specific guidance, restrict topics, or adjust tone. Case data and student ADIME work are always included automatically.
+    </p>
+    <div class="field-group">
+      <label>Additional instructions for Echo</label>
+      <textarea id="echoInstructions" style="min-height:200px;font-family:monospace;font-size:12px;" placeholder="e.g. This is a Fall 2025 NTR 4500 assignment. Students should reference the KDOQI 2020 guidelines for protein in CKD. Grading rubric: energy calculation 25pts, PES statement 25pts, intervention specificity 30pts, M/E plan 20pts."></textarea>
+    </div>
+    <div class="field-group">
+      <label>Echo password (students do not see this)</label>
+      <input id="echoPassword" type="text" placeholder="Same as INSTRUCTOR_PASSWORD in student file" style="font-family:monospace;">
+    </div>
+    <div class="section-actions">
+      <button class="btn btn-accent" onclick="saveEchoSettings()">Save Echo Settings</button>
+    </div>
+    <div class="success-msg" id="echoSuccess">Echo settings saved.</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL     = 'https://zopyowhptohmoftmrugi.supabase.co';
+const SUPABASE_ANON    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHlvd2hwdG9obW9mdG1ydWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjg5NDUsImV4cCI6MjA4OTYwNDk0NX0.G6jREyJhsRi4Pzjcy5HUqu7UlcU6d1RESE22_ynL_RI';
+const INSTRUCTOR_PASSWORD = 'instructor2025'; // Change this
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let allStudents = [];
+let allResources = [];
+let editingCaseIdx = 0;
+
+// ---- AUTH ----
+function doLogin() {
+  const pw = document.getElementById('pwInput').value;
+  if (pw === INSTRUCTOR_PASSWORD) {
+    document.getElementById('loginScreen').classList.add('hidden');
+    initDashboard();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('pwInput').value = '';
+  }
+}
+
+async function initDashboard() {
+  await Promise.all([loadStudents(), loadOverviewStats(), loadRecentActivity(), loadIppEngagement(), loadResources(), loadUserGuide(), buildCasePills(), loadEchoSettings()]);
+}
+
+function refreshAll() { initDashboard(); }
+
+function switchDash(id, el) {
+  document.querySelectorAll('.dash-content').forEach(d => d.classList.remove('active'));
+  document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('dash-' + id).classList.add('active');
+  el.classList.add('active');
+  if (id === 'activity') loadActivity();
+}
+
+// ---- OVERVIEW STATS ----
+async function loadOverviewStats() {
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const [{ count: nStudents }, { count: nSaves }, { count: nIpp }, { count: nEcho }, { count: nFeedback }] = await Promise.all([
+    sb.from('students').select('*', { count: 'exact', head: true }),
+    sb.from('adime_saves').select('*', { count: 'exact', head: true }),
+    sb.from('ipp_logs').select('*', { count: 'exact', head: true }),
+    sb.from('echo_logs').select('*', { count: 'exact', head: true }),
+    sb.from('feedback').select('*', { count: 'exact', head: true }),
+  ]);
+
+  const { data: todaySessions } = await sb.from('students').select('id').gte('last_seen', today.toISOString());
+  const { data: caseData } = await sb.from('adime_saves').select('case_index');
+  const uniqueCases = new Set(caseData?.map(r => r.case_index) || []).size;
+
+  document.getElementById('stat-students').textContent = nStudents || 0;
+  document.getElementById('stat-today').textContent = todaySessions?.length || 0;
+  document.getElementById('stat-cases').textContent = uniqueCases;
+  document.getElementById('stat-saves').textContent = nSaves || 0;
+  document.getElementById('stat-ipp').textContent = nIpp || 0;
+  document.getElementById('stat-echo').textContent = nEcho || 0;
+  document.getElementById('stat-feedback').textContent = nFeedback || 0;
+}
+
+async function loadRecentActivity() {
+  const { data } = await sb.from('adime_saves')
+    .select('saved_at, case_index, students(full_name, code)')
+    .order('saved_at', { ascending: false })
+    .limit(15);
+
+  const caseNames = ['DM2+CKD','Oncology/EN','Peds FTT','ESRD/HD','Cardiac ICU','Anorexia','Bariatric','Graves','TBI/PN','Crohn\'s','GDM','Peds Obesity'];
+
+  const el = document.getElementById('recentActivity');
+  if (!data || data.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No activity yet.</p>'; return; }
+
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Student</th><th>Case</th><th>Last Saved</th></tr></thead>
+    <tbody>
+      ${data.map(r => `<tr>
+        <td>${r.students?.full_name || '—'} <span style="color:var(--text-muted);font-size:11px;">${r.students?.code || ''}</span></td>
+        <td><span class="pill pill-blue">Case ${String(r.case_index+1).padStart(2,'0')} — ${caseNames[r.case_index] || ''}</span></td>
+        <td style="color:var(--text-muted);font-size:12px;">${new Date(r.saved_at).toLocaleString()}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function loadIppEngagement() {
+  const { data } = await sb.from('ipp_logs').select('case_index, engagement_score, note_revealed');
+  const el = document.getElementById('ippEngagementChart');
+  if (!data || data.length === 0) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">No IPP data yet.</p>'; return; }
+
+  const caseNames = ['DM2+CKD','Oncology','Peds FTT','ESRD','Cardiac','Anorexia','Bariatric','Graves','TBI','Crohn\'s','GDM','Peds Obs'];
+  const byCase = {};
+  data.forEach(r => {
+    if (!byCase[r.case_index]) byCase[r.case_index] = { total: 0, count: 0, revealed: 0 };
+    byCase[r.case_index].total += r.engagement_score || 0;
+    byCase[r.case_index].count++;
+    if (r.note_revealed) byCase[r.case_index].revealed++;
+  });
+
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Case</th><th>Avg Engagement</th><th>Messages</th><th>Notes Unlocked</th></tr></thead>
+    <tbody>
+      ${Object.entries(byCase).sort((a,b)=>a[0]-b[0]).map(([ci, d]) => {
+        const avg = d.count > 0 ? (d.total / d.count) : 0;
+        const pct = Math.round((avg / 3) * 100);
+        return `<tr>
+          <td>Case ${String(parseInt(ci)+1).padStart(2,'0')} — ${caseNames[ci] || ci}</td>
+          <td>
+            <span class="eng-bar"><span class="eng-fill" style="width:${pct}%"></span></span>
+            ${avg.toFixed(1)} / 3
+          </td>
+          <td>${d.count}</td>
+          <td>${d.revealed > 0 ? `<span class="pill pill-green">${d.revealed} unlocked</span>` : '<span class="pill pill-gray">none yet</span>'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ---- STUDENTS ----
+async function loadStudents() {
+  const { data } = await sb.from('students').select('*').order('full_name');
+  allStudents = data || [];
+
+  // Populate section filter
+  const sections = [...new Set(allStudents.map(s => s.section).filter(Boolean))];
+  const sf = document.getElementById('sectionFilter');
+  sf.innerHTML = '<option value="">All sections</option>' + sections.map(s => `<option>${s}</option>`).join('');
+
+  renderStudentTable(allStudents);
+}
+
+function filterStudents() {
+  const q = document.getElementById('studentSearch').value.toLowerCase();
+  const sec = document.getElementById('sectionFilter').value;
+  const filtered = allStudents.filter(s =>
+    (!q || s.full_name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q)) &&
+    (!sec || s.section === sec)
+  );
+  renderStudentTable(filtered);
+}
+
+function renderStudentTable(students) {
+  const el = document.getElementById('studentTable');
+  if (!students.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:8px;">No students found.</p>'; return; }
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Name</th><th>Code</th><th>Section</th><th>Last Active</th><th>Actions</th></tr></thead>
+    <tbody>
+      ${students.map(s => `<tr>
+        <td class="clickable" onclick="openStudentDetail('${s.id}')">${s.full_name}</td>
+        <td><code style="font-size:12px;background:var(--gray-100);padding:2px 6px;border-radius:4px;">${s.code}</code></td>
+        <td>${s.section || '<span style="color:var(--gray-400)">—</span>'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${s.last_seen ? new Date(s.last_seen).toLocaleString() : 'Never'}</td>
+        <td>
+          <button class="btn btn-sm" onclick="openStudentDetail('${s.id}')">View Work</button>
+          <button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="deleteStudent('${s.id}','${s.full_name}')">Remove</button>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function showAddStudent() {
+  const f = document.getElementById('addStudentForm');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+async function addStudent() {
+  const name = document.getElementById('ns_name').value.trim();
+  const code = document.getElementById('ns_code').value.trim();
+  const email = document.getElementById('ns_email').value.trim();
+  const section = document.getElementById('ns_section').value.trim();
+  if (!name || !code) { alert('Name and code are required.'); return; }
+
+  const { error } = await sb.from('students').insert({ full_name: name, code, email: email||null, section: section||null });
+  if (error) { alert('Error: ' + (error.message || 'Code may already exist.')); return; }
+
+  document.getElementById('addStudentSuccess').style.display = 'block';
+  setTimeout(() => document.getElementById('addStudentSuccess').style.display='none', 2000);
+  ['ns_name','ns_code','ns_email','ns_section'].forEach(id => document.getElementById(id).value = '');
+  loadStudents();
+}
+
+async function deleteStudent(id, name) {
+  if (!confirm(`Remove ${name}? This will delete all their saved data.`)) return;
+  await sb.from('students').delete().eq('id', id);
+  loadStudents();
+}
+
+// ---- STUDENT DETAIL MODAL ----
+async function openStudentDetail(studentId) {
+  const student = allStudents.find(s => s.id === studentId);
+  if (!student) return;
+
+  document.getElementById('detailTitle').textContent = student.full_name + ' (' + student.code + ')';
+  document.getElementById('detailBody').innerHTML = '<div class="loading">Loading student data...</div>';
+  document.getElementById('detailModal').classList.add('open');
+
+  const caseNames = ['DM2+CKD','Oncology/EN','Peds FTT','ESRD/HD','Cardiac ICU','Anorexia','Bariatric','Graves','TBI/PN','Crohn\'s','GDM','Peds Obesity'];
+
+  const [{ data: adime }, { data: ipp }, { data: patient }, { data: echo }] = await Promise.all([
+    sb.from('adime_saves').select('*').eq('student_id', studentId).order('case_index'),
+    sb.from('ipp_logs').select('*').eq('student_id', studentId).order('sent_at'),
+    sb.from('patient_logs').select('*').eq('student_id', studentId).order('sent_at'),
+    sb.from('echo_logs').select('*').eq('student_id', studentId).order('sent_at'),
+  ]);
+
+  let html = '';
+
+  // ADIME NOTES
+  if (adime && adime.length > 0) {
+    html += `<div class="detail-section"><h4>ADIME Notes</h4>`;
+    adime.forEach(row => {
+      const safeId = `adime_${studentId}_${row.case_index}`.replace(/-/g,'_');
+      html += `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;padding:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;font-weight:500;color:var(--primary-mid);">
+            Case ${String(row.case_index+1).padStart(2,'0')} — ${caseNames[row.case_index]||''}
+            <span style="font-size:11px;color:var(--text-muted);font-weight:normal;margin-left:8px;">Saved ${new Date(row.saved_at).toLocaleString()}</span>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="generateFeedback('${safeId}',${row.case_index})">⚡ Generate Feedback</button>
+        </div>`;
+      const fields = [
+        ['A — Energy Needs & Method', row.energy],
+        ['A — Protein Needs & Rationale', row.protein],
+        ['A — Physical/Anthropometric Summary', row.nfpf_summary],
+        ['D — PES Statement', row.pes],
+        ['I — Intervention(s)', row.intervention],
+        ['M/E — Monitoring & Evaluation', row.monitoring],
+        ['Info Gathered / Assumptions', row.missing_info],
+        ['Patient Barriers', row.barriers],
+        ['Patient Goals', row.goals],
+        ['Counseling Approach', row.counseling],
+      ];
+      // Store row data on window for feedback access
+      window[safeId] = row;
+      fields.forEach(([label, val]) => {
+        if (val) html += `<div class="detail-field"><label>${label}</label><div class="val">${escHtml(val)}</div></div>`;
+      });
+      html += `<div id="feedback_${safeId}" style="display:none;margin-top:14px;background:var(--primary-light);border:1px solid rgba(29,110,140,0.2);border-radius:8px;padding:14px;">
+        <div style="font-size:11px;font-weight:600;color:var(--primary-mid);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">AI Feedback</div>
+        <div id="feedback_text_${safeId}" style="font-size:13px;line-height:1.7;white-space:pre-wrap;"></div>
+      </div>`;
+      html += '</div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="detail-section"><h4>ADIME Notes</h4><p style="color:var(--text-muted);font-size:13px;">No ADIME notes saved yet.</p></div>';
+  }
+
+  // IPP CONVERSATIONS grouped by case+provider
+  if (ipp && ipp.length > 0) {
+    html += `<div class="detail-section"><h4>IPP Conversations</h4>`;
+    const groups = {};
+    ipp.forEach(r => {
+      const key = r.case_index + '_' + r.provider_index;
+      if (!groups[key]) groups[key] = { case_index: r.case_index, role: r.provider_role, msgs: [] };
+      if (r.student_message !== '[NOTE REVEALED]') groups[key].msgs.push(r);
+    });
+    Object.values(groups).forEach(g => {
+      const avgEng = g.msgs.length > 0 ? (g.msgs.reduce((a,m) => a + (m.engagement_score||0), 0) / g.msgs.length) : 0;
+      const noteRevealed = ipp.some(r => r.case_index === g.case_index && r.provider_index === g.msgs[0]?.provider_index && r.note_revealed);
+      html += `<div style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:500;margin-bottom:6px;color:var(--text);">
+          Case ${String(g.case_index+1).padStart(2,'0')} — ${g.role}
+          <span class="pill ${noteRevealed?'pill-green':'pill-warn'}" style="margin-left:6px;">${noteRevealed ? 'Note unlocked' : 'Note not unlocked'}</span>
+          <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">Avg engagement: ${avgEng.toFixed(1)}/3</span>
+        </div>
+        <div class="chat-log">
+          ${g.msgs.map(m => `
+            <div class="chat-log-msg student"><div class="role">Student</div>${escHtml(m.student_message)}</div>
+            ${m.provider_reply ? `<div class="chat-log-msg other"><div class="role">${g.role}</div>${escHtml(m.provider_reply)}</div>` : ''}
+          `).join('')}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // PATIENT INTERVIEW
+  if (patient && patient.length > 0) {
+    html += `<div class="detail-section"><h4>Patient Interviews</h4>`;
+    const byCaseP = {};
+    patient.forEach(r => { if (!byCaseP[r.case_index]) byCaseP[r.case_index] = []; byCaseP[r.case_index].push(r); });
+    Object.entries(byCaseP).forEach(([ci, msgs]) => {
+      html += `<div style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:500;margin-bottom:6px;">Case ${String(parseInt(ci)+1).padStart(2,'0')} — ${caseNames[ci]||''} (${msgs.length} questions)</div>
+        <div class="chat-log">
+          ${msgs.map(m => `
+            <div class="chat-log-msg student"><div class="role">Student</div>${escHtml(m.student_message)}</div>
+            ${m.patient_reply ? `<div class="chat-log-msg other"><div class="role">Patient</div>${escHtml(m.patient_reply)}</div>` : ''}
+          `).join('')}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  // ECHO CONVERSATIONS
+  if (echo && echo.length > 0) {
+    html += `<div class="detail-section"><h4>Echo Conversations</h4>`;
+    const byCaseE = {};
+    echo.forEach(r => { if (!byCaseE[r.case_index]) byCaseE[r.case_index] = []; byCaseE[r.case_index].push(r); });
+    Object.entries(byCaseE).forEach(([ci, msgs]) => {
+      html += `<div style="margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:500;margin-bottom:6px;">Case ${String(parseInt(ci)+1).padStart(2,'0')} — ${caseNames[ci]||''} (${msgs.length} messages)</div>
+        <div class="chat-log">
+          ${msgs.map(m => `
+            <div class="chat-log-msg student"><div class="role">Student</div>${escHtml(m.student_message)}</div>
+            ${m.echo_reply ? `<div class="chat-log-msg other"><div class="role">Echo</div>${escHtml(m.echo_reply)}</div>` : ''}
+          `).join('')}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  document.getElementById('detailBody').innerHTML = html || '<p style="color:var(--text-muted);font-size:13px;">No data yet for this student.</p>';
+}
+
+function closeDetail() { document.getElementById('detailModal').classList.remove('open'); }
+
+// ---- ACTIVITY TAB ----
+async function loadActivity() {
+  const type = document.getElementById('actTypeFilter').value;
+  const caseFilter = document.getElementById('actCaseFilter').value;
+  const el = document.getElementById('activityTable');
+  el.innerHTML = '<div class="loading">Loading...</div>';
+
+  const caseNames = ['DM2+CKD','Oncology/EN','Peds FTT','ESRD/HD','Cardiac ICU','Anorexia','Bariatric','Graves','TBI/PN','Crohn\'s','GDM','Peds Obesity'];
+
+  if (type === 'adime') {
+    let q = sb.from('adime_saves').select('*, students(full_name,code)').order('saved_at', { ascending: false }).limit(50);
+    if (caseFilter !== '') q = q.eq('case_index', parseInt(caseFilter));
+    const { data } = await q;
+    if (!data || !data.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:8px;">No data.</p>'; return; }
+    el.innerHTML = `<table class="data-table">
+      <thead><tr><th>Student</th><th>Case</th><th>PES Statement</th><th>Saved</th><th></th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td>${r.students?.full_name||'—'}</td>
+        <td><span class="pill pill-blue">Case ${String(r.case_index+1).padStart(2,'0')}</span></td>
+        <td style="max-width:300px;font-size:12px;">${r.pes ? escHtml(r.pes.substring(0,120)) + (r.pes.length>120?'…':'') : '<span style="color:var(--gray-400)">—</span>'}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${new Date(r.saved_at).toLocaleString()}</td>
+        <td><button class="btn btn-sm" onclick="openStudentDetail('${r.student_id}')">View</button></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+  } else if (type === 'ipp') {
+    let q = sb.from('ipp_logs').select('*, students(full_name,code)').order('sent_at', { ascending: false }).limit(100);
+    if (caseFilter !== '') q = q.eq('case_index', parseInt(caseFilter));
+    const { data } = await q;
+    if (!data || !data.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:8px;">No data.</p>'; return; }
+    el.innerHTML = `<table class="data-table">
+      <thead><tr><th>Student</th><th>Case</th><th>Provider</th><th>Message</th><th>Score</th><th>Note</th></tr></thead>
+      <tbody>${data.filter(r=>r.student_message!=='[NOTE REVEALED]').map(r => `<tr>
+        <td style="font-size:12px;">${r.students?.full_name||'—'}</td>
+        <td><span class="pill pill-blue" style="font-size:10px;">C${r.case_index+1}</span></td>
+        <td style="font-size:12px;">${r.provider_role?.split('/')[0]?.trim()||'—'}</td>
+        <td style="font-size:12px;max-width:240px;">${escHtml((r.student_message||'').substring(0,100))}</td>
+        <td>
+          <span class="pill ${r.engagement_score>=2?'pill-green':r.engagement_score===1?'pill-warn':'pill-danger'}">${r.engagement_score||0}/3</span>
+        </td>
+        <td>${r.note_revealed?'<span class="pill pill-green">✓</span>':''}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+  } else if (type === 'patient') {
+    let q = sb.from('patient_logs').select('*, students(full_name,code)').order('sent_at', { ascending: false }).limit(100);
+    if (caseFilter !== '') q = q.eq('case_index', parseInt(caseFilter));
+    const { data } = await q;
+    if (!data || !data.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:8px;">No data.</p>'; return; }
+    el.innerHTML = `<table class="data-table">
+      <thead><tr><th>Student</th><th>Case</th><th>Q#</th><th>Question</th><th>Time</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td style="font-size:12px;">${r.students?.full_name||'—'}</td>
+        <td><span class="pill pill-blue" style="font-size:10px;">C${r.case_index+1}</span></td>
+        <td style="font-size:12px;">${r.question_number}</td>
+        <td style="font-size:12px;max-width:300px;">${escHtml((r.student_message||'').substring(0,120))}</td>
+        <td style="font-size:11px;color:var(--text-muted);">${new Date(r.sent_at).toLocaleString()}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+  } else if (type === 'echo') {
+    let q = sb.from('echo_logs').select('*, students(full_name,code)').order('sent_at', { ascending: false }).limit(100);
+    if (caseFilter !== '') q = q.eq('case_index', parseInt(caseFilter));
+    const { data } = await q;
+    if (!data || !data.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:8px;">No data.</p>'; return; }
+    el.innerHTML = `<table class="data-table">
+      <thead><tr><th>Student</th><th>Case</th><th>Student Message</th><th>Time</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td style="font-size:12px;">${r.students?.full_name||'—'}</td>
+        <td><span class="pill pill-blue" style="font-size:10px;">C${r.case_index+1}</span></td>
+        <td style="font-size:12px;max-width:360px;">${escHtml((r.student_message||'').substring(0,140))}</td>
+        <td style="font-size:11px;color:var(--text-muted);">${new Date(r.sent_at).toLocaleString()}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+
+  } else if (type === 'feedback') {
+    const { data } = await sb.from('feedback').select('*, students(full_name,code)').order('submitted_at', { ascending: false }).limit(100);
+    if (!data || !data.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:8px;">No feedback submitted yet.</p>'; return; }
+    el.innerHTML = `<table class="data-table">
+      <thead><tr><th>Student</th><th>Rating</th><th>AI Helpful</th><th>Patient Realistic</th><th>IPP Realistic</th><th>Tech Issues</th><th>Open Feedback</th><th>Submitted</th></tr></thead>
+      <tbody>${data.map(r => `<tr>
+        <td style="font-size:12px;">${r.students?.full_name||'—'}</td>
+        <td><span class="pill ${r.rating>=4?'pill-green':r.rating>=3?'pill-blue':'pill-warn'}">${r.rating || '—'}/5</span></td>
+        <td>${r.ai_helpful?'✓':''}</td>
+        <td>${r.patient_realistic?'✓':''}</td>
+        <td>${r.ipp_realistic?'✓':''}</td>
+        <td>${r.technical_issues?'<span class="pill pill-danger">Yes</span>':''}</td>
+        <td style="font-size:12px;max-width:240px;">${escHtml((r.open_feedback||'').substring(0,100))}</td>
+        <td style="font-size:11px;color:var(--text-muted);">${new Date(r.submitted_at).toLocaleString()}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  }
+}
+
+// ---- CASE EDITOR ----
+const CASE_NAMES = ['DM2+CKD','Oncology/EN','Peds FTT','ESRD/HD','Cardiac ICU','Anorexia','Bariatric','Graves Disease','TBI/PN','Crohn\'s','GDM','Peds Obesity'];
+
+// Hardcoded defaults matching the Artifact CASES array
+const CASE_DEFAULTS = [
+  { name:'Maria G.', dx:'Type 2 Diabetes + CKD Stage 3b', setting:'Inpatient', setting_badge:'Inpatient', dx_badge:'DM2 + CKD', admit:'HbA1c 10.2%, acute hyperglycemia; referred for MNT', emoji:'👩', narrative:'Maria is a 58-year-old Mexican American woman who works as a school cafeteria supervisor in a small rural Georgia community. She was diagnosed with Type 2 diabetes 12 years ago but describes inconsistent medication adherence due to cost concerns. She lives with her husband and two adult children who prepare most meals. Family cooking traditions center on rice, beans, corn tortillas, and shared meals.', social:'Lives with husband and two adult children in a rural county with limited specialty care access. Drives 45 minutes to the nearest endocrinology clinic. Reports food access is generally adequate but notes reliance on discount grocery stores. Income: modest; has Medicare Part B. Denies tobacco/alcohol. Physical activity: minimal due to knee pain.', diet:'Typical breakfast: 2 eggs, 2 corn tortillas, refried beans, coffee with sugar. Lunch (at work): cafeteria food (sandwiches, pasta, canned fruit). Dinner: rice, beans, protein (chicken/pork), tortillas, sometimes tamales. Snacks: pan dulce 1–2x/week, soda (regular) ~12 oz daily. Estimated intake: 2,200–2,400 kcal/day; CHO ~280–310g/day.' },
+  { name:'James T.', dx:'Head & Neck Cancer, Post-Laryngectomy', setting:'Inpatient', setting_badge:'Inpatient', dx_badge:'Oncology / EN', admit:'Post-op day 5, initiating jejunal tube feeds', emoji:'👨', narrative:'James is a 63-year-old African American man who worked as a high school football coach for 30 years before retiring. He was diagnosed with Stage III squamous cell carcinoma of the larynx 8 months ago. He underwent concurrent chemoradiation before surgery. James is a widower and lives alone. His adult daughter Tamara has been staying with him since surgery.', social:'Lives alone in a mid-sized Georgia city. Daughter Tamara (an RN) is primary caregiver during recovery. Has Medicare. Former smoker: 30 pack-year history, quit 5 years ago. No alcohol.', diet:'NPO prior to surgery for 2 weeks due to odynophagia. Current: jejunal tube feeds initiated POD 3 at 20 mL/hr; goal rate TBD by RD. Formula: Peptamen 1.5 (semi-elemental).' },
+  { name:'Elijah W.', dx:'Failure to Thrive, Pediatric', setting:'Outpatient', setting_badge:'Outpatient', dx_badge:'Pediatric FTT', admit:'Weight-for-length <3rd percentile; referred by pediatrician', emoji:'👶', narrative:'Elijah is the second child of Marcus and Deja, a young couple in their late 20s living in suburban Atlanta. He was born full-term at appropriate weight but dropped crossing two major percentile lines between 6 and 12 months. Deja reports that Elijah refuses most table foods and gags on anything with texture.', social:'Two-parent household, suburban Atlanta. Adequate income; food security present. Mother has anxiety about feeding and reports mealtimes as stressful.', diet:'Current: ~20 oz Enfamil Infant formula/day. Baby food: Stage 2 purees, ~3 oz/day. Refuses all Stage 3 or mashed textures. Estimated intake: 750–820 kcal/day (DRI for age: ~1,000 kcal).' },
+  { name:'Dorothy S.', dx:'ESRD on Hemodialysis', setting:'Inpatient', setting_badge:'Inpatient', dx_badge:'ESRD / HD', admit:'HD 3x/week; admitted for AV fistula revision + malnutrition screening', emoji:'👵', narrative:'Dorothy is a 71-year-old Black woman who has been on hemodialysis for 6 years. A retired schoolteacher and grandmother of five, Dorothy describes herself as \'too stubborn to slow down\' but her daughter Lynette has noticed significant weight loss and fatigue over the past 4 months.', social:'Lives alone. Daughter Lynette lives 20 minutes away and visits twice weekly. Income: Social Security + small pension. Enrolled in Medicare. Southern food traditions central to identity.', diet:'Dialysis days: appetite poor post-HD; usually eats saltine crackers and soup. Non-dialysis days: collard greens (cooked with salt pork), cornbread, chicken, canned vegetables. Estimated intake on dialysis days: 800–1,000 kcal.' },
+  { name:'Robert K.', dx:'CABG ×3, Post-Op ICU Day 2', setting:'ICU', setting_badge:'ICU / Cardiac', dx_badge:'CABG Post-Op', admit:'Elective CABG; transferred to ICU post-op for hemodynamic monitoring', emoji:'👴', narrative:'Robert is a 67-year-old white man who recently retired from a 35-year career as a civil engineer. He lives with his wife Sandra in suburban Atlanta. Prior to surgery, Robert had been attempting to \'eat better and lose weight\' on advice from his cardiologist — he lost ~8 kg over 3 months pre-op.', social:'Married, lives with wife. Two adult children, supportive. Medicare and supplemental insurance. Former light smoker: quit 15 years ago.', diet:'Pre-op: 1,600–1,800 kcal/day (self-reported low-fat diet). Currently: NPO post-op; EN ordered but not initiated (hemodynamic instability).' },
+  { name:'Alex M.', dx:'Anorexia Nervosa, Restricting Type', setting:'Inpatient', setting_badge:'Inpatient', dx_badge:'AN-R, Medical', admit:'Medical stabilization: HR 44 bpm, BMI 14.1, QTc prolonged', emoji:'🧑', narrative:'Alex is a 19-year-old white college sophomore who was brought to the ED by her roommate after collapsing during a morning run. She has a known history of AN diagnosed at age 16, with two prior partial hospitalization programs. She describes herself as \'a perfectionist.\'', social:'College sophomore, living in residence hall. Parents divorced; significant family conflict around treatment. Strong academic identity; fears weight gain will affect performance.', diet:'Self-reported: \'I eat enough.\' Observed intake in hospital: refusing most meal trays, accepting broth and diet beverages. Previously restricting to <500 kcal/day for several weeks. No purging behaviors identified.' },
+  { name:'Darnell P.', dx:'Morbid Obesity, Bariatric Pre-Op', setting:'Outpatient', setting_badge:'Outpatient', dx_badge:'Bariatric Pre-Op', admit:'Pre-bariatric surgery evaluation; BMI 48.2; sleeve gastrectomy planned', emoji:'🧔', narrative:'Darnell is a 44-year-old Black man who works as a high school basketball coach. He has struggled with his weight since childhood and has tried multiple commercial weight loss programs. He is highly motivated for bariatric surgery. Darnell lives with his wife and two teenage sons.', social:'Married with two teenagers. Works as a high school coach; high stress, irregular eating schedule. Adequate income; insured. Emotional eating pattern identified.', diet:'Typical intake: skips breakfast, large lunch (fast food 3–4x/wk), snacks during practice (chips, soda), large late dinner with family. Estimated: 3,200–3,800 kcal/day.' },
+  { name:'Yuki H.', dx:'Graves\' Disease / Hyperthyroidism', setting:'Outpatient', setting_badge:'Outpatient', dx_badge:'Hyperthyroidism', admit:'Referred by endocrinology for MNT: weight loss, hypermetabolism', emoji:'👩', narrative:'Yuki is a 34-year-old Japanese American woman working as a UX designer at a tech startup. She was born in Japan and moved to the U.S. for graduate school 8 years ago. She lives with her partner in Atlanta. Yuki was diagnosed with Graves\' disease 6 weeks ago after noticing heart palpitations and unexplained weight loss.', social:'Lives with long-term partner; no children. Full-time tech job; high-stress work environment. Good food access; enjoys cooking Japanese and fusion cuisine. High health literacy.', diet:'Japanese-influenced diet. Breakfast: rice, miso soup, fish/egg. Dinner: home-cooked (fish, tofu, vegetables, rice, seaweed). High in iodine-containing foods. Coffee: 3 cups/day. Eating more than usual but still losing weight.' },
+  { name:'Tyrone B.', dx:'Traumatic Brain Injury, Day 4 ICU', setting:'ICU', setting_badge:'ICU / Trauma', dx_badge:'TBI / PN', admit:'MVA; GCS 7 on admission; intubated; NG tube, PN ordered', emoji:'🧑', narrative:'Tyrone is a 28-year-old Black man who worked as a warehouse supervisor. He was involved in a high-speed motor vehicle accident four days ago and was intubated at the scene. His family — mother, two sisters, and fiancée — have been present around the clock. They describe Tyrone as healthy, active, and a recreational basketball player.', social:'Single (engaged). Lives independently. Close-knit family; mother is designated healthcare proxy. Employment: full-time supervisory role; has job protection under FMLA.', diet:'Pre-injury: reportedly healthy, home-cooked meals, active lifestyle, no dietary restrictions. Current: PN via central line (Day 2 PN). Lipid emulsion held today due to hypertriglyceridemia. EN on hold pending GI bleed risk reassessment.' },
+  { name:'Sofia R.', dx:'Crohn\'s Disease, Active Flare', setting:'Inpatient', setting_badge:'Inpatient', dx_badge:'Crohn\'s / IBD', admit:'Abdominal pain, bloody diarrhea ×5 days, weight loss 6 kg over 3 weeks', emoji:'👩', narrative:'Sofia is a 29-year-old Latina woman (Colombian American, second generation) who works as a graphic designer. She was diagnosed with Crohn\'s disease at age 22. She is currently uninsured and delayed seeking care due to cost concerns. She lives alone in Atlanta.', social:'Lives alone in Atlanta; family in another state. Uninsured; applying for Medicaid. Financial stress significant. High health literacy. Bilingual (Spanish/English).', diet:'During flare: tolerating only broth, white rice, bananas, crackers. Pre-flare usual diet: well-rounded Colombian home cooking, ~1,800 kcal/day. Currently estimated intake <600 kcal/day.' },
+  { name:'Imani J.', dx:'Gestational Diabetes + Food Insecurity', setting:'Outpatient', setting_badge:'Outpatient', dx_badge:'GDM + Food Insecurity', admit:'26 weeks gestation; GDM diagnosed at 24-week screen; referred for MNT', emoji:'🤰', narrative:'Imani is a 26-year-old Black woman living in a rural county in South Georgia. She is 26 weeks pregnant with her second child. She works part-time at a convenience store and her partner recently lost his job. Food access is limited: the nearest full-service grocery store is 22 miles away.', social:'Rural South Georgia. Household of 4. WIC enrolled. SNAP application pending. No nearby grocery store; relies on convenience store and church food pantry. Transportation: one vehicle, shared with partner.', diet:'Breakfast — cereal with milk or nothing. Lunch — beans and rice, ramen. Dinner — fried chicken, cornbread, greens, beans. Snacks: chips, crackers, sweet tea. Estimated intake: 1,600–1,800 kcal; irregular meal timing; high-glycemic pattern.' },
+  { name:'Miguel O.', dx:'Pediatric Obesity, BMI >99th %ile', setting:'Outpatient', setting_badge:'Outpatient', dx_badge:'Peds Obesity', admit:'Referred by pediatrician; BMI 29.8 (>99th %ile for age/sex); weight management', emoji:'🧒', narrative:'Miguel is a 10-year-old boy who lives with his parents, Roberto and Lucia, and two younger siblings in a mid-sized Georgia city. His family immigrated from Mexico 8 years ago. Miguel loves soccer but has been less active since the family moved to a neighborhood with less outdoor play space.', social:'Two-parent household. SNAP enrolled. Neighborhood: low-walkability, limited safe outdoor play space. Family food traditions: Mexican home cooking central to identity. Father resistant to dietary changes. Bilingual household.', diet:'Breakfast: cereal with whole milk, or eggs and tortillas on weekends. After school: chips, cookies, sugary drinks (2+ sodas or juice/day). Dinner: home-cooked Mexican food. Agua fresca with meals. Estimated intake: 2,400–2,800 kcal/day.' },
+];
+
+function buildCasePills() {
+  const el = document.getElementById('casePills');
+  el.innerHTML = CASE_NAMES.map((n,i) =>
+    `<span class="case-pill${i===0?' active':''}" onclick="selectCase(${i},this)">Case ${String(i+1).padStart(2,'0')}</span>`
+  ).join('');
+  loadCaseEditor(0);
+}
+
+function selectCase(idx, el) {
+  editingCaseIdx = idx;
+  document.querySelectorAll('.case-pill').forEach((p,i) => p.classList.toggle('active', i===idx));
+  loadCaseEditor(idx);
+}
+
+async function loadCaseEditor(idx) {
+  const el = document.getElementById('caseEditorBody');
+  el.innerHTML = '<div class="loading">Loading case data...</div>';
+
+  const { data: existing } = await sb.from('case_overrides').select('*').eq('case_index', idx).single();
+  // Merge: Supabase overrides take priority, fall back to hardcoded defaults
+  const defaults = CASE_DEFAULTS[idx] || {};
+  const d = { ...defaults, ...(existing || {}) };
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-title">Case ${String(idx+1).padStart(2,'0')} — ${CASE_NAMES[idx]} — Metadata</div>
+      <div class="row-2">
+        <div class="field-group"><label>Patient Name</label><input id="ce_name" value="${esc(d.name||'')}"></div>
+        <div class="field-group"><label>Diagnosis (dx)</label><input id="ce_dx" value="${esc(d.dx||'')}"></div>
+      </div>
+      <div class="row-3">
+        <div class="field-group"><label>Setting</label><input id="ce_setting" value="${esc(d.setting||'')}"></div>
+        <div class="field-group"><label>Setting Badge</label><input id="ce_sbadge" value="${esc(d.setting_badge||'')}"></div>
+        <div class="field-group"><label>Dx Badge</label><input id="ce_dbadge" value="${esc(d.dx_badge||'')}"></div>
+      </div>
+      <div class="row-2">
+        <div class="field-group"><label>Admit / Referral Reason</label><input id="ce_admit" value="${esc(d.admit||'')}"></div>
+        <div class="field-group"><label>Emoji</label><input id="ce_emoji" value="${esc(d.emoji||'')}" style="font-size:20px;width:70px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Patient Image</div>
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <img id="ce_img_preview" src="${d.image_url||''}" style="width:100px;height:100px;border-radius:50%;object-fit:cover;border:2px solid var(--border);display:${d.image_url?'block':'none'};">
+          <div id="ce_img_placeholder" style="width:100px;height:100px;border-radius:50%;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:36px;border:2px solid var(--border);${d.image_url?'display:none;':''}">👤</div>
+        </div>
+        <div>
+          <label class="add-btn" style="cursor:pointer;display:inline-block;margin-bottom:8px;">
+            📷 Upload Image
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadPatientImage(this,${idx})">
+          </label>
+          <div style="font-size:12px;color:var(--text-muted);">JPG, PNG, WebP. Recommended: ~400×400px square portrait.</div>
+          <input id="ce_image_url" type="text" value="${esc(d.image_url||'')}" placeholder="Or paste image URL" style="margin-top:8px;font-size:12px;font-family:monospace;width:100%;border:1px solid var(--gray-200);border-radius:6px;padding:6px 10px;">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Patient Narrative &amp; History</div>
+      <div class="field-group"><label>Patient Narrative (background story)</label><textarea id="ce_narrative">${esc(d.narrative||'')}</textarea></div>
+      <div class="field-group"><label>Social History &amp; Living Situation</label><textarea id="ce_social">${esc(d.social||'')}</textarea></div>
+      <div class="field-group"><label>Diet History &amp; 24-Hour Recall</label><textarea id="ce_diet">${esc(d.diet||'')}</textarea></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">IPP Team Members</div>
+      <div id="ippEditorCards"></div>
+      <button class="add-btn" onclick="addIppMember()">+ Add Team Member</button>
+    </div>
+
+    <div class="section-actions">
+      <button class="btn btn-primary" onclick="saveCaseOverride(${idx})">Save Case ${idx+1} Changes</button>
+    </div>
+    <div class="success-msg" id="caseSuccess">Case saved successfully.</div>
+  `;
+
+  // Build IPP editor
+  const ippTeam = d.ipp_team || [];
+  window._editingIpp = JSON.parse(JSON.stringify(ippTeam));
+  renderIppEditor();
+}
+
+function renderIppEditor() {
+  const container = document.getElementById('ippEditorCards');
+  if (!container) return;
+  container.innerHTML = (window._editingIpp||[]).map((m,i) => `
+    <div class="ipp-edit-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:500;color:var(--text-muted);">Team Member ${i+1}: ${m.role||'New'}</span>
+        <button class="btn btn-sm btn-danger" onclick="removeIpp(${i})">Remove</button>
+      </div>
+      <div class="row-2">
+        <div class="field-group"><label>Role / Discipline</label><input id="ipp_role_${i}" value="${esc(m.role||'')}" onchange="updateIpp(${i},'role',this.value)"></div>
+        <div class="field-group"><label>Initials</label><input id="ipp_init_${i}" value="${esc(m.initials||'')}" style="width:70px;" onchange="updateIpp(${i},'initials',this.value)"></div>
+      </div>
+      <div class="field-group"><label>Their Note (shown after student earns it)</label><textarea id="ipp_note_${i}" onchange="updateIpp(${i},'note',this.value)">${esc(m.note||'')}</textarea></div>
+      <div class="field-group"><label>Placeholder question hint</label><textarea id="ipp_q_${i}" style="min-height:50px;" onchange="updateIpp(${i},'questions',this.value)">${esc(m.questions||'')}</textarea></div>
+    </div>
+  `).join('');
+}
+
+function updateIpp(i, key, val) { if (window._editingIpp && window._editingIpp[i]) window._editingIpp[i][key] = val; }
+function removeIpp(i) { if (!confirm('Remove?')) return; window._editingIpp.splice(i,1); renderIppEditor(); }
+function addIppMember() {
+  window._editingIpp.push({ role:'New Team Member', initials:'XX', color:'#555', bg:'#F0F0EE', note:'', questions:'' });
+  renderIppEditor();
+}
+
+async function saveCaseOverride(idx) {
+  // Gather current IPP values from inputs
+  (window._editingIpp||[]).forEach((m,i) => {
+    ['role','initials','note','questions'].forEach(key => {
+      const el = document.getElementById(`ipp_${key==='questions'?'q':''}${key==='note'?'note':key}_${i}`);
+      if (el) m[key] = el.value;
+    });
+  });
+
+  const payload = {
+    case_index: idx,
+    name: document.getElementById('ce_name').value.trim() || null,
+    dx: document.getElementById('ce_dx').value.trim() || null,
+    setting: document.getElementById('ce_setting').value.trim() || null,
+    setting_badge: document.getElementById('ce_sbadge').value.trim() || null,
+    dx_badge: document.getElementById('ce_dbadge').value.trim() || null,
+    admit: document.getElementById('ce_admit').value.trim() || null,
+    emoji: document.getElementById('ce_emoji').value.trim() || null,
+    image_url: document.getElementById('ce_image_url').value.trim() || null,
+    narrative: document.getElementById('ce_narrative').value.trim() || null,
+    social: document.getElementById('ce_social').value.trim() || null,
+    diet: document.getElementById('ce_diet').value.trim() || null,
+    ipp_team: window._editingIpp || [],
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await sb.from('case_overrides').upsert(payload, { onConflict: 'case_index' });
+  const s = document.getElementById('caseSuccess');
+  if (error) { s.textContent = 'Error: ' + error.message; s.style.color = 'var(--danger)'; }
+  else { s.textContent = 'Case saved successfully.'; s.style.color = ''; }
+  s.style.display = 'block';
+  setTimeout(() => s.style.display = 'none', 2500);
+}
+
+async function uploadPatientImage(input, caseIdx) {
+  const file = input.files[0];
+  if (!file) return;
+  const ext = file.name.split('.').pop();
+  const path = `case_${caseIdx}_${Date.now()}.${ext}`;
+  const { data, error } = await sb.storage.from('patient-images').upload(path, file, { upsert: true });
+  if (error) { alert('Upload failed: ' + error.message); return; }
+  const { data: urlData } = sb.storage.from('patient-images').getPublicUrl(path);
+  const url = urlData.publicUrl;
+  document.getElementById('ce_image_url').value = url;
+  const preview = document.getElementById('ce_img_preview');
+  const placeholder = document.getElementById('ce_img_placeholder');
+  preview.src = url; preview.style.display = 'block';
+  placeholder.style.display = 'none';
+}
+
+// ---- RESOURCES ----
+async function loadResources() {
+  const { data } = await sb.from('resources').select('*').order('sort_order');
+  allResources = data || [];
+  renderResourceEditor();
+}
+
+function renderResourceEditor() {
+  const el = document.getElementById('resourceEditorList');
+  if (!el) return;
+  el.innerHTML = allResources.map((r,i) => `
+    <div class="res-edit-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:500;color:var(--text-muted);">${r.section} — ${r.title}</span>
+        <button class="btn btn-sm btn-danger" onclick="deleteResource('${r.id}',${i})">Remove</button>
+      </div>
+      <div class="row-2">
+        <div class="field-group"><label>Section</label><input id="rr_sec_${i}" value="${esc(r.section)}"></div>
+        <div class="field-group"><label>Type Label</label><input id="rr_type_${i}" value="${esc(r.type_label)}"></div>
+      </div>
+      <div class="field-group"><label>Title</label><input id="rr_title_${i}" value="${esc(r.title)}"></div>
+      <div class="field-group"><label>Description</label><input id="rr_desc_${i}" value="${esc(r.description||'')}"></div>
+      <div class="field-group"><label>URL</label><input id="rr_url_${i}" value="${esc(r.url||'')}" style="font-size:12px;font-family:monospace;"></div>
+      <div class="row-2">
+        <div class="field-group"><label>Is PDF?</label>
+          <select id="rr_pdf_${i}">
+            <option value="false" ${!r.is_pdf?'selected':''}>No — web link</option>
+            <option value="true" ${r.is_pdf?'selected':''}>Yes — PDF</option>
+          </select>
+        </div>
+        <div class="field-group"><label>Open Mode</label>
+          <select id="rr_mode_${i}">
+            <option value="tab" ${r.open_mode==='tab'?'selected':''}>New tab</option>
+            <option value="embed" ${r.open_mode==='embed'?'selected':''}>In-app viewer</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deleteResource(id, idx) {
+  if (!confirm('Remove this resource?')) return;
+  await sb.from('resources').delete().eq('id', id);
+  allResources.splice(idx, 1);
+  renderResourceEditor();
+}
+
+function addResource() {
+  allResources.push({ id: null, section: 'New Section', type_label: 'Reference', type_class: 'type-ref', title: 'New Resource', description: '', url: '', is_pdf: false, open_mode: 'tab', sort_order: 99 });
+  renderResourceEditor();
+}
+
+async function uploadPdf(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const path = `pdf_${Date.now()}_${file.name}`;
+  const { error } = await sb.storage.from('resources').upload(path, file, { upsert: true });
+  if (error) { alert('Upload failed: ' + error.message); return; }
+  const { data } = sb.storage.from('resources').getPublicUrl(path);
+  allResources.push({ id: null, section: 'Uploaded Resources', type_label: 'PDF', type_class: 'type-ref', title: file.name.replace('.pdf',''), description: '', url: data.publicUrl, is_pdf: true, open_mode: 'embed', sort_order: 99 });
+  renderResourceEditor();
+  alert('PDF uploaded! Edit the title and section, then click Save All Resources.');
+}
+
+async function saveAllResources() {
+  for (let i = 0; i < allResources.length; i++) {
+    const r = allResources[i];
+    const payload = {
+      section: document.getElementById(`rr_sec_${i}`)?.value?.trim() || r.section,
+      type_label: document.getElementById(`rr_type_${i}`)?.value?.trim() || r.type_label,
+      type_class: r.type_class || 'type-ref',
+      title: document.getElementById(`rr_title_${i}`)?.value?.trim() || r.title,
+      description: document.getElementById(`rr_desc_${i}`)?.value?.trim() || '',
+      url: document.getElementById(`rr_url_${i}`)?.value?.trim() || '',
+      is_pdf: document.getElementById(`rr_pdf_${i}`)?.value === 'true',
+      open_mode: document.getElementById(`rr_mode_${i}`)?.value || 'tab',
+      sort_order: i
+    };
+    if (r.id) {
+      await sb.from('resources').update(payload).eq('id', r.id);
+    } else {
+      const { data } = await sb.from('resources').insert(payload).select().single();
+      if (data) allResources[i].id = data.id;
+    }
+  }
+  const s = document.getElementById('resSuccess');
+  s.style.display = 'block';
+  setTimeout(() => s.style.display = 'none', 2500);
+  loadResources();
+}
+
+// ---- USER GUIDE ----
+let allGuide = [];
+
+async function loadUserGuide() {
+  try {
+    const { data } = await sb.from('user_guide').select('*').order('sort_order');
+    allGuide = (data || []).filter(g => g.section !== '__echo_instructions__');
+    renderGuideEditor();
+  } catch(e) { console.warn('User guide load failed', e); }
+}
+
+function renderGuideEditor() {
+  const el = document.getElementById('userGuideEditorList');
+  if (!el) return;
+  if (!allGuide.length) { el.innerHTML = '<p style="font-size:13px;color:var(--text-muted);">No guide sections yet. Click + Add Section to create one.</p>'; return; }
+  el.innerHTML = allGuide.map((g, i) => `
+    <div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;background:var(--gray-100);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:500;color:var(--text-muted);">Section ${i+1}</span>
+        <button class="btn btn-sm btn-danger" onclick="deleteGuideSection('${g.id||''}',${i})">Remove</button>
+      </div>
+      <div class="field-group" style="margin-bottom:8px;"><label>Section Title</label><input id="guide_sec_${i}" value="${esc(g.section)}"></div>
+      <div class="field-group"><label>Content</label><textarea id="guide_content_${i}" style="min-height:100px;">${esc(g.content)}</textarea></div>
+    </div>
+  `).join('');
+}
+
+async function deleteGuideSection(id, idx) {
+  if (!confirm('Remove this section?')) return;
+  if (id) { try { await sb.from('user_guide').delete().eq('id', id); } catch(e) {} }
+  allGuide.splice(idx, 1);
+  renderGuideEditor();
+}
+
+function addGuideSection() {
+  allGuide.push({ id: null, section: 'New Section', content: '', sort_order: allGuide.length });
+  renderGuideEditor();
+  document.getElementById('userGuideEditorList').lastElementChild?.scrollIntoView({ behavior:'smooth' });
+}
+
+async function saveUserGuide() {
+  for (let i = 0; i < allGuide.length; i++) {
+    const g = allGuide[i];
+    const section = document.getElementById('guide_sec_' + i)?.value?.trim() || g.section;
+    const content = document.getElementById('guide_content_' + i)?.value?.trim() || '';
+    const payload = { section, content, sort_order: i, updated_at: new Date().toISOString() };
+    if (g.id) {
+      await sb.from('user_guide').update(payload).eq('id', g.id);
+    } else {
+      const { data } = await sb.from('user_guide').insert(payload).select().single();
+      if (data) allGuide[i].id = data.id;
+    }
+  }
+  const s = document.getElementById('guideSuccess');
+  s.style.display = 'block';
+  setTimeout(() => s.style.display = 'none', 2500);
+}
+
+// ---- ECHO SETTINGS ----
+async function loadEchoSettings() {
+  try {
+    const { data } = await sb.from('user_guide').select('content').eq('section', '__echo_instructions__').single();
+    if (data) document.getElementById('echoInstructions').value = data.content || '';
+  } catch(e) {}
+}
+
+async function saveEchoSettings() {
+  const instructions = document.getElementById('echoInstructions').value.trim();
+  await sb.from('user_guide').upsert({
+    section: '__echo_instructions__',
+    content: instructions,
+    sort_order: 9999,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'section' });
+  const s = document.getElementById('echoSuccess');
+  s.style.display = 'block';
+  setTimeout(() => s.style.display = 'none', 2500);
+}
+
+// ---- GENERATE FEEDBACK ----
+const CASE_NAMES_FULL = [
+  'Type 2 Diabetes + CKD Stage 3b (Inpatient)',
+  'Head & Neck Cancer, Post-Laryngectomy, Enteral Nutrition (Inpatient)',
+  'Pediatric Failure to Thrive, 14 months (Outpatient)',
+  'End-Stage Renal Disease on Hemodialysis (Inpatient)',
+  'CABG ×3, Post-Op ICU Day 2',
+  'Anorexia Nervosa, Restricting Type, Medical Stabilization (Inpatient)',
+  'Morbid Obesity, Bariatric Pre-Op Evaluation (Outpatient)',
+  'Graves Disease / Hyperthyroidism (Outpatient)',
+  'Traumatic Brain Injury, Parenteral Nutrition, ICU Day 4',
+  'Crohn\'s Disease, Active Flare (Inpatient)',
+  'Gestational Diabetes + Food Insecurity (Outpatient)',
+  'Pediatric Obesity BMI >99th %ile, Hispanic/Latino Family (Outpatient)',
+];
+
+async function generateFeedback(safeId, caseIdx) {
+  const row = window[safeId];
+  if (!row) return;
+
+  const fbDiv = document.getElementById('feedback_' + safeId);
+  const fbText = document.getElementById('feedback_text_' + safeId);
+  fbDiv.style.display = 'block';
+  fbText.textContent = 'Generating feedback...';
+
+  const adimeSummary = [
+    row.energy       ? `A — Energy Needs & Method:\n${row.energy}` : null,
+    row.protein      ? `A — Protein Needs & Rationale:\n${row.protein}` : null,
+    row.nfpf_summary ? `A — Physical/Anthropometric Summary:\n${row.nfpf_summary}` : null,
+    row.pes          ? `D — PES Statement:\n${row.pes}` : null,
+    row.intervention ? `I — Intervention(s):\n${row.intervention}` : null,
+    row.monitoring   ? `M/E — Monitoring & Evaluation:\n${row.monitoring}` : null,
+    row.missing_info ? `Info Gathered / Assumptions:\n${row.missing_info}` : null,
+    row.barriers     ? `Patient Barriers:\n${row.barriers}` : null,
+    row.goals        ? `Patient Goals:\n${row.goals}` : null,
+    row.counseling   ? `Counseling Approach:\n${row.counseling}` : null,
+  ].filter(Boolean).join('\n\n');
+
+  const prompt = `You are an expert dietetic educator reviewing a student's ADIME note for the following clinical case:
+
+CASE: ${CASE_NAMES_FULL[caseIdx] || 'Case ' + (caseIdx+1)}
+
+STUDENT'S ADIME SUBMISSION:
+${adimeSummary || '(No content submitted)'}
+
+Provide structured, specific feedback on this ADIME note. For each section present, evaluate:
+- Clinical accuracy and appropriateness
+- Use of evidence-based guidelines (name specific ones where relevant: ASPEN, KDOQI, ADA, ESPEN, GLIM, AND/IDNT)
+- Internal consistency (does the intervention follow from the diagnosis? does the PES evidence match the case data?)
+- Specificity and completeness
+- Any errors, omissions, or unsupported reasoning
+
+Format your feedback with clear section headers matching the ADIME structure. Be specific — reference the student's actual words where helpful. Be constructive but academically rigorous. End with 2–3 priority recommendations for improvement.`;
+
+  try {
+    const resp = await fetch('https://zopyowhptohmoftmrugi.supabase.co/functions/v1/ai-proxy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHlvd2hwdG9obW9mdG1ydWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjg5NDUsImV4cCI6MjA4OTYwNDk0NX0.G6jREyJhsRi4Pzjcy5HUqu7UlcU6d1RESE22_ynL_RI`
+      },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: prompt }],
+        maxTokens: 1500
+      })
+    });
+    const data = await resp.json();
+    const feedback = data.text || 'Unable to generate feedback.';
+    fbText.textContent = feedback;
+  } catch(e) {
+    fbText.textContent = 'Error generating feedback — check your connection and try again.';
+  }
+}
+
+// ---- HELPERS ----
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
