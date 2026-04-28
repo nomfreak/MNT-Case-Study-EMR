@@ -2156,7 +2156,14 @@ function closePdfModal() {
 const SUPABASE_URL  = 'https://zopyowhptohmoftmrugi.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHlvd2hwdG9obW9mdG1ydWdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMjg5NDUsImV4cCI6MjA4OTYwNDk0NX0.G6jREyJhsRi4Pzjcy5HUqu7UlcU6d1RESE22_ynL_RI';
 const AI_PROXY_URL  = 'https://zopyowhptohmoftmrugi.supabase.co/functions/v1/ai-proxy';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    }
+  }
+});
 
 let currentStudent = null;
 let currentSessionId = null;
@@ -2401,9 +2408,6 @@ async function logEchoMessage(caseIdx, studentMsg, echoReply) {
     });
   } catch(e) { console.warn('Echo log failed', e); }
 }
-
-// Patch sendEchoMessage to append instructor addendum
-const _origSendEcho = sendEchoMessage;
 </script>
 <!-- PDF EMBED MODAL -->
 <div class="pdf-modal" id="pdfModal">
